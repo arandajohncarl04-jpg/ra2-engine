@@ -7362,7 +7362,7 @@ public:
         draw_beacons(ren, tc);    // W9-05-08: own + mutual allies' beacons
         draw_messages(ren, tc);   // W2-UI-21 (game saved, defeated, low power)
         draw_timer_stack(ren, tc);   // W6-05-04/05 mission timer + SW countdowns
-        draw_touch_bar(ren);      // W2-AR-08 (touch only)
+        draw_touch_bar(ren, tc);  // Project Chrono: crisp, bigger touch commands
         draw_touch_aim(ren);           // W6-01-02 / -07 (touch only)
         draw_touch_mode_banner(ren);   // W4-AM-03 (touch only)
         draw_touch_hint(ren);          // W4-AM-01 (touch only)
