@@ -3491,9 +3491,17 @@ bool building_art_opaque(const ra2engine::Building& b, const BuildingAssets& ba,
     const bool buildup =
         selling || (b.state == ra2engine::Building::State::Buildup && art.has_buildup);
     const ra2assets::ShpFile& shp = buildup ? art.buildup : art.shp;
-    const int frame = selling ? ra2engine::mirrored_buildup_frame(b, art.buildup.count())
-                    : buildup ? ra2engine::buildup_frame(b, art.buildup.count())
-                              : ra2engine::building_frame(b, art.shp.count(), condition_yellow);
+    int frame = selling ? ra2engine::mirrored_buildup_frame(b, art.buildup.count())
+              : buildup ? ra2engine::buildup_frame(b, art.buildup.count())
+                        : ra2engine::building_frame(b, art.shp.count(), condition_yellow);
+    if (!buildup && g_fx && b.type < static_cast<int>(ba.roster.size())) {
+        // A touch must hit the ACTUAL visible garrison sprite, not the plain
+        // unoccupied image. Keep alpha picking in sync with draw_building.
+        const auto& def = ba.roster[static_cast<std::size_t>(b.type)];
+        frame = pres_building_main_frame(b, def.id,
+                                         def.image.empty() ? def.id : def.image,
+                                         frame, art.shp.count(), condition_yellow);
+    }
     const ra2engine::ScreenPt dp = ra2engine::building_draw_point(b.cx, b.cy, level);
     const int fcx = dp.x + cam.x, fcy = dp.y + cam.y;
     if (shp_frame_opaque(shp, frame, fcx, fcy, px, py, masks)) return true;
