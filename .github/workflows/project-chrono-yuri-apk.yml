@@ -21,8 +21,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Use runner's Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          command -v sdkmanager
+          yes | sdkmanager --licenses > /dev/null || true
       - name: Install SDK, NDK r27c and CMake
         shell: bash
         run: |
