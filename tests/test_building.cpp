@@ -85,6 +85,28 @@ TEST_CASE("building_frame: healthy/damaged at ConditionYellow") {
     CHECK(building_frame(b, 2, 0.5) == 0);              // 1 image frame only
 }
 
+TEST_CASE("garrison main sprite never uses the rubble image while alive") {
+    Building b = mk(0, 0, 2, 2);
+    b.occupants = {7, 8};
+    // Four image frames + four shadow frames; #3 is reserved for rubble
+    // by LeaveRubble=yes types.
+    b.hp = 100;
+    CHECK(garrison_building_frame(b, 8, 0.5, true) == 2);
+    b.hp = 50;
+    CHECK(garrison_building_frame(b, 8, 0.5, true) == 1);
+    b.hp = 1;
+    CHECK(garrison_building_frame(b, 8, 0.5, true) == 1);
+    // A second hit can kill/evict occupants; it must remain damaged.
+    b.occupants.clear();
+    CHECK(garrison_building_frame(b, 8, 0.5, true) == 1);
+    // When no rubble image is reserved, true occupied+damaged frame #3
+    // remains supported (including custom maps/mods).
+    b.occupants = {7};
+    CHECK(garrison_building_frame(b, 8, 0.5, false) == 3);
+    // A two-image SHP never tries occupied frames.
+    CHECK(garrison_building_frame(b, 4, 0.5, true) == 1);
+}
+
 TEST_CASE("buildup_frame + step_buildings: plays once then Idle") {
     Building b = mk(0, 0, 2, 2);
     b.state = Building::State::Buildup;
