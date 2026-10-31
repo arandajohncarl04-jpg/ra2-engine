@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">RA2 Engine</string>
+    <string name="app_name">Project Chrono</string>
     <string name="setup_title">Red Alert 2 game files needed</string>
     <string name="setup_intro">This app is an engine only. It plays the original Red Alert 2 using the game files from your own copy of the game; no game data is included.</string>
     <string name="setup_folder">The engine reads the files from:</string>
