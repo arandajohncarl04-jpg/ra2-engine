@@ -20,13 +20,13 @@
 // W4-AM-05: the column sits along the LEFT edge of the tactical view and is
 // CLOSED by default (only [CMD] at the left edge), so it never covers
 // the bottom of the playfield; it closes itself after a one-shot command and
-// after 6 s without use. The armed modifiers stay visible on [CMD] when closed.
+// after 10 s without use. The armed modifiers stay visible on [CMD] when closed.
 // W4-AM-03: an armed cursor mode (sell / repair / placement / superweapon
 // target) shows a banner with a 56 px [X] cancel button (touch_ui.inc).
 //
 // The buttons call the SAME command handlers the KeyboardMD.ini hotkeys use
 // (game_scene_controls.inc hotkey()), so behaviour is identical. Buttons are
-// 50x56 logical px: >= 42x48 dp on a phone canvas. Desktop with a mouse never
+// 64x60 logical px on the phone canvas. Desktop with a mouse never
 // shows it. [Engine affordance, not original UI: the original is mouse + keyboard only.]
 struct TouchBtn { const char* label; int id; };
 enum : int { TB_TOGGLE = 1, TB_ADD, TB_FIRE, TB_MOVE, TB_STOP, TB_GUARD, TB_SCATTER, TB_DEPLOY, TB_BRIEF,
@@ -34,10 +34,10 @@ enum : int { TB_TOGGLE = 1, TB_ADD, TB_FIRE, TB_MOVE, TB_STOP, TB_GUARD, TB_SCAT
              TB_VIEW1 = 90, TB_GROUP1 = 100 };
 // W6-01-09: 8 rows (8 x 58 = 464 logical px fits the 548-px phone canvas below
 // the EVA lines), two columns per page.
-static constexpr int kTbW = 50, kTbH = 56, kTbGap = 2, kTbX = 4, kTbRows = 8;
+static constexpr int kTbW = 64, kTbH = 60, kTbGap = 4, kTbX = 6, kTbRows = 8;
 // The column is vertically centred on the left edge, below the EVA message lines.
 int tb_y0() const { return std::max(56, (kWinH - kTbRows * (kTbH + kTbGap)) / 2); }
-static constexpr double kTbAutoClose = 6.0;   // seconds without use
+static constexpr double kTbAutoClose = 10.0;   // seconds without use
 const std::vector<TouchBtn>& touch_buttons() const {
     static const std::vector<TouchBtn> all = {
         {"CMD", TB_TOGGLE}, {"+SEL", TB_ADD}, {"FIRE", TB_FIRE}, {"MOVE", TB_MOVE},
@@ -131,8 +131,10 @@ void touch_command(int id, bool long_press, uint32_t t_ms) {
 // keyboard). Returns true when the event was consumed.
 bool touch_bar_handle(ra2engine::InputEvent& ev) {
     if (ev.touch) touch_ui_ = true;
-    // A drag that starts on the column does not scroll the map.
-    if (ev.kind == ra2engine::InputEvent::Pan && ev.touch && touch_btn_at(ev.x0, ev.y0) >= 0) return true;
+    // Ignore map panning from a toolbar-originating drag, even if a command
+    // was toggled or the page changed while the finger was held down.
+    if (ev.kind == ra2engine::InputEvent::Pan && ev.touch &&
+        (touch_down_btn_ >= 0 || touch_btn_at(ev.x0, ev.y0) >= 0)) return true;
     const bool ptr = ev.kind == ra2engine::InputEvent::PointerDown || ev.kind == ra2engine::InputEvent::PointerUp;
     if (!ptr) return false;
     const int bi = touch_btn_at(ev.x, ev.y);
@@ -194,7 +196,7 @@ void touch_bar_tick(double dt) {
     touch_bar_idle_ += dt;
     if (touch_bar_idle_ >= kTbAutoClose) { touch_bar_open_ = false; touch_page2_ = false; }
 }
-void draw_touch_bar(SDL_Renderer* ren) {
+void draw_touch_bar(SDL_Renderer* ren, ra2engine::TextureCache& tc) {
     if (!touch_bar_visible()) return;
     const auto& bs = touch_buttons();
     const int n = touch_btn_count();
@@ -215,9 +217,18 @@ void draw_touch_bar(SDL_Renderer* ren) {
         std::string label = bs[static_cast<size_t>(i)].label;
         if (id == TB_TOGGLE && !touch_bar_open_ && armed_mod)   // closed: show what is armed
             label = touch_add_ ? "+SEL" : touch_fire_ ? "FIRE" : touch_move_ ? "MOVE" : "BOX";
-        const int scale = label.size() <= 2 ? 3 : 2;
-        const int lw = static_cast<int>(label.size()) * 6 * scale - scale;
-        draw_text(ren, label, r.x + (r.w - lw) / 2, r.y + (r.h - 7 * scale) / 2, scale, 235, 225, 200);
+#ifdef __ANDROID__
+        // The touch column shares the UI3 antialiased system-font rasterizer.
+        if (!chrono_android_text(ren, tc, label, r, 1, 23,
+                                 SDL_Color{248, 231, 198, 255})) {
+#endif
+            const int scale = label.size() <= 2 ? 3 : 2;
+            const int lw = static_cast<int>(label.size()) * 6 * scale - scale;
+            draw_text(ren, label, r.x + (r.w - lw) / 2, r.y + (r.h - 7 * scale) / 2,
+                      scale, 235, 225, 200);
+#ifdef __ANDROID__
+        }
+#endif
     }
 }
 #ifdef __ANDROID__
