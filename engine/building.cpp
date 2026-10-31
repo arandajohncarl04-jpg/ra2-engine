@@ -113,6 +113,18 @@ int building_frame(const Building& b, int shp_frame_count, double condition_yell
     return frac <= condition_yellow ? 1 : 0;
 }
 
+int garrison_building_frame(const Building& b, int shp_frame_count,
+                            double condition_yellow, bool leave_rubble) {
+    const int images = std::max(1, shp_frame_count / 2);
+    const int base = building_frame(b, shp_frame_count, condition_yellow);
+    if (images < 4 || b.occupants.empty()) return base;
+    if (base == 0) return 2;  // healthy and occupied
+    // Occupied + damaged would conventionally select image frame 3.
+    // But for LeaveRubble structures frame 3 is the DEAD rubble image. Use
+    // normal damaged frame 1 until the building actually dies.
+    return leave_rubble ? 1 : 3;
+}
+
 int buildup_frame(const Building& b, int buildup_shp_frame_count) {
     int image_frames = buildup_shp_frame_count / 2;   // [RE-GATE: building-render.md §5]
     if (image_frames < 1) return 0;
