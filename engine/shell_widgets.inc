@@ -69,15 +69,34 @@ struct ShellPainter {
 #endif
     }
     double text_w(const std::string& s, double logical_px) const {
+#ifdef __ANDROID__
+        if (chrono_android_font().valid) {
+            const int px = std::max(12, static_cast<int>(
+                std::lround(xf.s * std::max(16.0, logical_px))));
+            return chrono_android_text_width(s, px) / xf.s;
+        }
+#endif
         if (!fnt()) return 0.0;
         return fnt_text_width(*art.font, s) * glyph_scale(logical_px) / xf.s;
     }
     // align: 0 = left, 1 = centre, 2 = right; vertically centred in the rect.
     void text(const std::string& s, int lx, int ly, int lw, int lh, int align,
               const ra2assets::Palette* pal, const char* keypfx, double logical_px) const {
-        if (!fnt() || !pal || s.empty()) return;
-        const ra2assets::Font& f = *art.font;
+        if (s.empty()) return;
         const SDL_Rect box = dev(lx, ly, lw, lh);
+#ifdef __ANDROID__
+        // Antialiased Android font, not the small 12metfnt pixel glyphs.
+        // Every call uses the actual fitted control rectangle.
+        const bool disabled = pal && pal == art.font_pal_disabled;
+        const bool heading = keypfx && std::string(keypfx) == "oph:";
+        const SDL_Color ink = disabled ? SDL_Color{174, 98, 98, 255} :
+                              heading ? SDL_Color{249, 206, 109, 255} :
+                                        SDL_Color{252, 232, 158, 255};
+        const int px = static_cast<int>(std::lround(xf.s * std::max(16.0, logical_px)));
+        if (chrono_android_text(ren, tc, s, box, align, px, ink)) return;
+#endif
+        if (!fnt() || !pal) return;
+        const ra2assets::Font& f = *art.font;
         double sc = glyph_scale(logical_px);
 #ifdef __ANDROID__
         // No overflow into adjacent buttons/checkboxes. Allow slightly
