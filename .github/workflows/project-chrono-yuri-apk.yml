@@ -1,0 +1,58 @@
+name: Project Chrono - Yuri experimental APK
+
+on:
+  push:
+    branches:
+      - project-chrono/yuri-experimental
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - name: Checkout experimental Yuri source
+        uses: actions/checkout@v4
+      - name: Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install SDK, NDK r27c and CMake
+        shell: bash
+        run: |
+          sdkmanager --install \
+            'platforms;android-35' \
+            'build-tools;35.0.0' \
+            'cmake;3.22.1' \
+            'ndk;27.2.12479018' \
+            'platform-tools'
+          printf 'sdk.dir=%s\nra2.ndkPath=%s\n' \
+            "$ANDROID_HOME" \
+            "$ANDROID_HOME/ndk/27.2.12479018" > android/local.properties
+      - name: Build native Android debug APK
+        shell: bash
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleDebug -Pra2.jobs=2 --no-daemon --stacktrace
+      - name: Validate ARM64 APK
+        shell: bash
+        run: |
+          apk=android/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          unzip -t "$apk" > /dev/null
+          unzip -l "$apk" | grep 'lib/arm64-v8a/libmain.so'
+          sha256sum "$apk"
+      - name: Upload Project Chrono APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProjectChrono-Yuri-Experimental-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
