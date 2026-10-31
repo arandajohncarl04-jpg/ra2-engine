@@ -1,0 +1,25 @@
+name: Project Chrono - asset-free Yuri smoke test
+
+on:
+  push:
+    branches:
+      - project-chrono/yuri-experimental
+    paths:
+      - tools/chrono_yuri_smoke.py
+      - engine/gf_start.inc
+      - engine/ai_side_catalog.inc
+      - .github/workflows/chrono-yuri-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cxx-yuri-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Yuri experimental source
+        uses: actions/checkout@v4
+      - name: Run original C++ faction functions with synthetic rules
+        run: python3 tools/chrono_yuri_smoke.py
