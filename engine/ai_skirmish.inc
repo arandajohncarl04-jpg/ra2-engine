@@ -141,7 +141,8 @@ ra2engine::AiHouseConfig make_ai_slot_config(const ra2engine::SkirmishSlot& s, d
     acfg.catalog.naval_yard_adjacency =
         static_cast<int>(rules.general_double("AINavalYardAdjacency", 20.0));
     acfg.team.nav_factory_types = factory_types_for(ba, id_of(acfg.catalog.naval_yard));
-    acfg.team.trigger_side = s.side == ra2engine::World::Side::Soviet ? 2 : 1;  // [ai-trigger.md §5]
+    acfg.team.trigger_side = s.side == ra2engine::World::Side::Yuri ? 3
+                            : s.side == ra2engine::World::Side::Soviet ? 2 : 1;
     acfg.team.house_name = country;
     fill_ai_building_maps(acfg.team, ba, rules, rules_ini);
     // W7-04-18 [RE: TechnoTypeClass ToProtect=, read by ReceiveDamage
@@ -188,7 +189,8 @@ ra2engine::AiHouseConfig make_ai_slot_config(const ra2engine::SkirmishSlot& s, d
         const int c = ra2engine::difficulty_class_index(s.diff);
         acfg.virtual_purifiers = c < (int)v.size() ? std::max(0, std::atoi(v[(std::size_t)c].c_str())) : 0;
     }
-    std::cerr << "[ai] slot side=" << (s.side == ra2engine::World::Side::Soviet ? "Soviet" : "Allied")
+    std::cerr << "[ai] slot side=" << (s.side == ra2engine::World::Side::Yuri ? "Yuri"
+                                         : s.side == ra2engine::World::Side::Soviet ? "Soviet" : "Allied")
               << " country=" << country << " diff=" << (int)s.diff
               << " roster=" << acfg.team.unit_roster.size()
               << " teams=" << acfg.team.aimd.teams.size()
