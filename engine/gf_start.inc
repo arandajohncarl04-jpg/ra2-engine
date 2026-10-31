@@ -58,7 +58,8 @@ inline std::vector<std::string> gf_tokens(const std::string& v) {
 }
 
 inline std::string gf_default_country(ra2engine::World::Side side) {
-    return side == ra2engine::World::Side::Soviet ? "Russians" : "Americans";
+    return side == ra2engine::World::Side::Yuri ? "YuriCountry"
+         : side == ra2engine::World::Side::Soviet ? "Russians" : "Americans";
 }
 
 inline bool gf_owner_has(const Rules& rules, const std::string& id, const std::string& country) {
@@ -393,12 +394,12 @@ Scene* gf_make_restart_scene(bool no_audio, const ra2engine::SkirmishConfig& cfg
 
 // gF G-17 [RE: multihouse.md §1, CONFIRMED [Countries] + per-country Side=]:
 // the lobby picks a COUNTRY; the side follows from its rules Side= (GDI ->
-// Allied, Nod -> Soviet). The playable list is the [Countries] order minus
-// YuriCountry (Yuri's side is a non-goal) and the passive/civilian houses.
+// Allied, Nod -> Soviet, ThirdSide -> Yuri). Experimentally enable Yuri
+// selection while keeping passive/civilian houses excluded.
 inline const std::vector<std::string>& gf_lobby_countries() {
     static const std::vector<std::string> k = {"Americans", "Alliance", "French", "Germans",
                                                "British", "Africans", "Arabs", "Confederation",
-                                               "Russians"};
+                                               "Russians", "YuriCountry"};
     return k;
 }
 inline ra2engine::World::Side gf_side_of_country(const Rules& rules, const std::string& c) {
@@ -406,6 +407,8 @@ inline ra2engine::World::Side gf_side_of_country(const Rules& rules, const std::
     for (char& ch : side) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
     if (side == "NOD") return ra2engine::World::Side::Soviet;
     if (side == "GDI") return ra2engine::World::Side::Allied;
+    if (side == "THIRDSIDE" || side == "YURI" || c == "YuriCountry")
+        return ra2engine::World::Side::Yuri;
     const auto& k = gf_lobby_countries();   // rules without Side=: the documented split
     const auto it = std::find(k.begin(), k.end(), c);
     return (it != k.end() && it - k.begin() >= 5) ? ra2engine::World::Side::Soviet
