@@ -78,7 +78,7 @@ android {
     }
     defaultConfig {
         if (buildAsApplication) {
-            applicationId "org.ra2.engine"
+            applicationId "org.projectchrono.yuritest"
         }
         minSdk 21
         targetSdk 35
