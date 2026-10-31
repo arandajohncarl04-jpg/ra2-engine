@@ -709,9 +709,12 @@ void SkirmishSetupScene::play_probe(ra2play::Probe& p) {
         p.set_s("ai" + n, k == 0 ? "Human" : kAi[r.ai + 1]);
         p.set_s("country" + n, r.country >= 0 && r.country < (int)countries_.size()
                                    ? countries_[(size_t)r.country] : "Random");
-        p.set_s("side" + n, r.country < 0 || r.country >= (int)countries_.size() ? "RANDOM"
-                            : gf_side_of_country(rules_, countries_[(size_t)r.country]) ==
-                                      ra2engine::World::Side::Soviet ? "SOVIET" : "ALLIED");
+        const auto picked_side = r.country >= 0 && r.country < (int)countries_.size()
+            ? gf_side_of_country(rules_, countries_[(size_t)r.country])
+            : ra2engine::World::Side::Neutral;
+        p.set_s("side" + n, picked_side == ra2engine::World::Side::Yuri ? "YURI"
+                            : picked_side == ra2engine::World::Side::Soviet ? "SOVIET"
+                            : picked_side == ra2engine::World::Side::Allied ? "ALLIED" : "RANDOM");
         p.set("color" + n, r.color);
         p.set("row_active" + n, ra2engine::lobby_row_active(st_, k) ? 1 : 0);
     }
