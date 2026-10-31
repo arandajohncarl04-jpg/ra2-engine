@@ -5153,6 +5153,9 @@ void draw_fnt_text_f(SDL_Renderer* ren, ra2engine::TextureCache& tc, const ra2as
     }
 }
 
+// Project Chrono: use the phone's antialiased system font on Android.
+#include "android_text.inc"
+
 void shade_rect(SDL_Renderer* ren, const ra2engine::SbRect& r, Uint8 alpha, Uint8 rr = 0,
                 Uint8 gg = 0, Uint8 bb = 0) {
     SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
@@ -6384,6 +6387,10 @@ void draw_shell(SDL_Renderer* ren, ra2engine::TextureCache& tc, const MenuArt& a
                             int gscale, int ldx = 0, int ldy = 0) {
             SDL_Rect box = dev(lx, ly, lw, lh);
 #ifdef __ANDROID__
+            if (chrono_android_text(ren, tc, s, box, 1,
+                                    static_cast<int>(std::lround(canvas_scale * (lh <= 20 ? 16.0 : 23.0))),
+                                    SDL_Color{246, 206, 119, 255})) return;
+            // Fallback to original Westwood glyphs when system fonts are unavailable.
             // Project Chrono: the stock 16px header glyphs are unreadable on
             // a dense phone display. Use fractional text sizing in the shell
             // chrome too, with width/height bounds to preserve hit geometry.
