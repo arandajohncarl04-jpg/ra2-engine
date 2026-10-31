@@ -49,7 +49,10 @@ if (ra2Build < 0 || ra2Build > 999) throw new GradleException("ra2.buildNumber m
 ra2VersionCode = ra2Semver.group(1).toInteger() * 10000000 + ra2Semver.group(2).toInteger() * 100000 +
                  ra2Semver.group(3).toInteger() * 1000 + ra2Build
 def ra2Desc = ra2Git(['describe', '--always', '--dirty', '--abbrev=7'])
-if (ra2Desc) ra2VersionName = ra2VersionBase + '+g' + ra2Desc
+// Every Project Chrono test build identifies itself in Android App Info AND
+// on the native main menu. The Actions run number also advances versionCode.
+ra2VersionName = ra2VersionBase + "-chrono-ui3.b" + ra2Build +
+                 (ra2Desc ? "+g" + ra2Desc : "")
 
 // W2-AR-11: release signing from keystore.properties (gitignored):
 //   storeFile=<path>  storePassword=...  keyAlias=...  keyPassword=...
@@ -126,6 +129,10 @@ android {
     // handler, W2-AR-30); release drops both.
     buildTypes {
         debug {
+            // Install Project Chrono test builds beside the original RA2 Engine.
+            // Github Actions debug signing keys differ from older APKs, so
+            // installing over org.ra2.engine could fail or risk losing saves.
+            applicationIdSuffix ".chrono"
             externalNativeBuild {
                 cmake {
                     // -Pra2.nativeBuildType=Debug gives the old -O0 native code
