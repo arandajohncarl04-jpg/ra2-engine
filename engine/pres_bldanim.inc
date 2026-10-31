@@ -262,8 +262,9 @@ int pres_building_main_frame(const ra2engine::Building& b, const std::string& id
     const int images = std::max(1, count / 2);
     const bool damaged = b.max_hp > 0 && b.hp <= yellow * b.max_hp;
     if (r.occupiable && images >= 4) {
-        const int f = (b.occupants.empty() ? 0 : 2) + (damaged ? 1 : 0);
-        return std::min(f, images - 1);
+        // Project Chrono: image 3 is also the LeaveRubble sprite on many
+        // civilian buildings. Never render it for a living garrison.
+        return ra2engine::garrison_building_frame(b, count, yellow, r.leave_rubble);
     }
     if (r.gate) {
         const PresFx::BldAnims& a = g_fx->building(pres_upper(image));
