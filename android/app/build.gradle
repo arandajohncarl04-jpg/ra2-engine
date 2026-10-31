@@ -51,7 +51,7 @@ ra2VersionCode = ra2Semver.group(1).toInteger() * 10000000 + ra2Semver.group(2).
 def ra2Desc = ra2Git(['describe', '--always', '--dirty', '--abbrev=7'])
 // Every Project Chrono test build identifies itself in Android App Info AND
 // on the native main menu. The Actions run number also advances versionCode.
-ra2VersionName = ra2VersionBase + "-chrono-ui3.b" + ra2Build +
+ra2VersionName = ra2VersionBase + "-chrono-ui4.b" + ra2Build +
                  (ra2Desc ? "+g" + ra2Desc : "")
 
 // W2-AR-11: release signing from keystore.properties (gitignored):
