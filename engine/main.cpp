@@ -2597,7 +2597,7 @@ BuildingAssets load_building_assets(const ra2assets::MixFile& ra2,
     // it is excluded from every buildable/sidebar closure. Art [RE-FALLBACK]: if
     // the CAOILD SHP is absent it stays in ba.roster with art.ok=false +
     // placeholder (buildings are never dropped on art failure).
-    static const char* kRoster[41] = {"GACNST", "GAPOWR", "GAPILE", "GAWEAP",
+    static const char* kRoster[54] = {"GACNST", "GAPOWR", "GAPILE", "GAWEAP",
                                        "NACNST", "NAPOWR", "NAHAND", "NAWEAP",
                                        "GAREFN", "NAREFN", "GAPILL", "GATOW",
                                        "NALASR", "NABNKR", "TESLA",  "NAFLAK",
@@ -2636,7 +2636,12 @@ BuildingAssets load_building_assets(const ra2assets::MixFile& ra2,
                                        // genermd.mix / snowmd.mix; [GAROBO]
                                        // Prerequisite=GAWEAP,GACNST TechLevel=10
                                        // PowersUnit=ROBO). Only the roster= WITNESS grows.
-                                       "GAROBO"};
+                                       "GAROBO",
+                                       // Project Chrono: append Yuri buildings (experimental).
+                                       "YACNST", "YAPOWR", "YABRCK", "YAWEAP",
+                                       "YAREFN", "YAYARD", "YAGRND", "YATECH",
+                                       "YAGGUN", "YAPSYT", "YACLON", "YAGNTC",
+                                       "YAPPET"};
     constexpr int kRoster2First = 24;   // first P6-appended index
     // rulesmd [General] BuildupTime=.06 (minutes) [RE: building-render.md §5].
     const double build_time_min = rules.general_double("BuildupTime", 0.06);
@@ -2711,8 +2716,8 @@ BuildingAssets load_building_assets(const ra2assets::MixFile& ra2,
     };
     (void)get_mix;
 
-    ba.roster.reserve(40);
-    ba.art.reserve(40);
+    ba.roster.reserve(54);
+    ba.art.reserve(54);
     int ok_n = 0;
     for (const char* id_c : kRoster) {
         const std::string id = id_c;
@@ -3037,8 +3042,9 @@ ra2engine::AiHouseConfig make_ai_config(const BuildingAssets& ba, const Rules& r
     cfg.catalog.war_factory = pick("BuildWeapons");
     cfg.catalog.radar = pick("BuildRadar");
     for (const std::string& d : aiside::csv_tokens(rules.section_string(
-             "AI", side == ra2engine::World::Side::Soviet ? "SovietBaseDefenses"
-                                                          : "AlliedBaseDefenses", ""))) {
+             "AI", side == ra2engine::World::Side::Yuri ? "YuriBaseDefenses"
+                  : side == ra2engine::World::Side::Soviet ? "SovietBaseDefenses"
+                  : "AlliedBaseDefenses", ""))) {
         const int t = ok_index(d.c_str());
         if (t >= 0) cfg.catalog.defenses.push_back(t);
     }
@@ -3177,7 +3183,14 @@ void spawn_base(ra2engine::World& world, const BuildingAssets& ba, int house, in
     // Allied -> reproduces `house == 1 ? NACNST : GACNST` and the house-1 base
     // set EXACTLY -> the spawned types are byte-identical in every gate.
     const bool soviet = (world.house_side(house) == ra2engine::World::Side::Soviet);
-    place(roster_index(ba, soviet ? "NACNST" : "GACNST"), cx, cy, /*bypass=*/true);
+    const bool yuri = (world.house_side(house) == ra2engine::World::Side::Yuri);
+    place(roster_index(ba, yuri ? "YACNST" : soviet ? "NACNST" : "GACNST"),
+          cx, cy, /*bypass=*/true);
+    if (yuri) { // fallback/demo path; real skirmish normally deploys an MCV
+        place(roster_index(ba, "YAPOWR"), cx + 6, cy, /*bypass=*/false);
+        place(roster_index(ba, "YABRCK"), cx + 6, cy + 4, /*bypass=*/false);
+        place(roster_index(ba, "YAWEAP"), cx - 1, cy + 6, /*bypass=*/false);
+    }
     if (soviet) {
         place(roster_index(ba, "NAPOWR"), cx + 6, cy, /*bypass=*/false);
         place(roster_index(ba, "NAHAND"), cx + 6, cy + 4, /*bypass=*/false);
@@ -3204,7 +3217,7 @@ void spawn_base(ra2engine::World& world, const BuildingAssets& ba, int house, in
     // supplied by the caller as harv_va/harv_chrono like the Soviet HARV; GAAIRC
     // (radar, added to kRoster in T2) also satisfies the Allied RADAR prereq +
     // the ORCA dock. Offsets [RE-GATE: roster.md §3 adjudication].
-    if (allied_full && !soviet) {
+    if (allied_full && !soviet && !yuri) {
         place(roster_index(ba, "GAPOWR"), cx + 6, cy, /*bypass=*/false);
         place(roster_index(ba, "GAPILE"), cx + 6, cy + 4, /*bypass=*/false);
         place(roster_index(ba, "GAWEAP"), cx - 1, cy + 6, /*bypass=*/false);
