@@ -6383,12 +6383,27 @@ void draw_shell(SDL_Renderer* ren, ra2engine::TextureCache& tc, const MenuArt& a
         auto centered = [&](const std::string& s, int lx, int ly, int lw, int lh,
                             int gscale, int ldx = 0, int ldy = 0) {
             SDL_Rect box = dev(lx, ly, lw, lh);
+#ifdef __ANDROID__
+            // Project Chrono: the stock 16px header glyphs are unreadable on
+            // a dense phone display. Use fractional text sizing in the shell
+            // chrome too, with width/height bounds to preserve hit geometry.
+            double sc = std::max(1.0, canvas_scale * (lh <= 20 ? 16.0 : 22.0) / 16.0);
+            const double glyph_w = fnt_text_width(f, s);
+            if (glyph_w > 0) sc = std::min(sc, std::max(0.75, (box.w - 6.0) / glyph_w));
+            if (f.height() > 0) sc = std::min(sc, std::max(0.75, box.h * 0.96 / f.height()));
+            const double tw = glyph_w * sc;
+            const double th = f.height() * sc;
+            const double tx = box.x + (box.w - tw) / 2.0 + ldx * canvas_scale;
+            const double ty = box.y + (box.h - th) / 2.0 + ldy * canvas_scale;
+            draw_fnt_text_f(ren, tc, f, *art.font_pal, s, tx, ty, "shf:", sc);
+#else
             int tw = fnt_text_width(f, s) * gscale;
             while (gscale > 1 && tw > box.w) { --gscale; tw = fnt_text_width(f, s) * gscale; }
             const int th = f.height() * gscale;
             const int tx = box.x + (box.w - tw) / 2 + static_cast<int>(std::lround(ldx * canvas_scale));
             const int ty = box.y + (box.h - th) / 2 + static_cast<int>(std::lround(ldy * canvas_scale));
             draw_fnt_text(ren, tc, f, *art.font_pal, s, tx, ty, "shf:", gscale);
+#endif
         };
         for (int i = 0; i < static_cast<int>(buttons.size()); ++i) {
             const ShellButton& b = buttons[i];
