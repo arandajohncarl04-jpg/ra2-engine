@@ -250,6 +250,21 @@ private:
     enum Act { A_NONE, A_START, A_CHOOSE, A_BACK, A_USEMAP, A_RANDMAP, A_CANCEL };
 
     static constexpr int kWinW = 1280, kWinH = 720;
+
+    // Project Chrono: retain the calibrated 640x480 PC dialogs, but give
+    // Android users a full-width, finger-sized modal for combo selections.
+    // Avoid changing desktop mouse targets and the existing --play gates.
+    static bool mobile_picker() {
+#ifdef __ANDROID__
+        return true;
+#else
+        return false;
+#endif
+    }
+    static ra2engine::SbRect picker_prev_rect()   { return {127, 390, 112, 44}; }
+    static ra2engine::SbRect picker_next_rect()   { return {252, 390, 112, 44}; }
+    static ra2engine::SbRect picker_cancel_rect() { return {377, 390, 134, 44}; }
+
     static ShellXform xform() { return ShellXform::make(kWinW, kWinH); }
     static void to_logical(int dx, int dy, int& lx, int& ly) {
         const ShellXform xf = xform();
@@ -417,11 +432,21 @@ private:
             list_.visible = 9;                 // msg 0x4DE, 9
         }
         list_.sel = cur;
-        const int h = list_.rows() * list_.item_h + 2;
-        int y = face.y + face.h;
-        if (y + h > 448) y = face.y - h;       // drop up near the bottom bar
-        const int extra = (kind == CB_COLOR) ? 22 : 0;   // GLD + swatch + strip
-        list_.r = {face.x, y, face.w + extra, h};
+        if (mobile_picker()) {
+            // Four generous rows instead of seven 16px rows: 70 logical px
+            // per item, with independent large PAGE UP/DOWN and Cancel keys.
+            // All three player combos use this on touch devices.
+            list_.item_h = 70;
+            list_.visible = 4;
+            list_.strip_w = 0;  // the 12px mouse scrollbar is not touchable
+            list_.r = {122, 92, 396, list_.rows() * list_.item_h + 2};
+        } else {
+            const int h = list_.rows() * list_.item_h + 2;
+            int y = face.y + face.h;
+            if (y + h > 448) y = face.y - h;       // drop up near the bottom bar
+            const int extra = (kind == CB_COLOR) ? 22 : 0;   // GLD + swatch + strip
+            list_.r = {face.x, y, face.w + extra, h};
+        }
         list_.reveal(cur);
         play_ui("menu:acbopen");
     }
@@ -823,7 +848,58 @@ void SkirmishSetupScene::render(ra2engine::Platform& plat, ra2engine::TextureCac
             p.label(sl_lbl[s], lr.x, lr.y, lr.w, lr.h, 0);
             p.trackbar(slider_rect(s), slider_pos(s), slider_range(s), true, slider_text(s), true);
         }
-        if (combo_ != CB_NONE) list_.draw(p);
+        if (combo_ != CB_NONE) {
+            if (!mobile_picker()) {
+                list_.draw(p);
+            } else {
+                // Full-screen dimming prevents stray taps on the tiny controls
+                // behind this chooser. The original fonts and chrome remain.
+                p.fill(p.dev(ra2engine::SbRect{0, 0, 640, 480}), 0, 0, 0, 210);
+                const ra2engine::SbRect panel{105, 34, 430, 416};
+                p.fill(p.dev(panel), 9, 12, 19);
+                p.frame(p.dev(panel), true);
+                const std::string heading = combo_ == CB_COUNTRY ? "SELECT COUNTRY" :
+                                            combo_ == CB_COLOR ? "SELECT COLOR" : "SELECT OPPONENT";
+                p.header(heading, 118, 49, 404, 32, 1);
+                for (int i = list_.top; i < list_.top + list_.rows(); ++i) {
+                    const ra2engine::SbRect ir = list_.item_rect(i);
+                    const bool selected = (i == list_.sel);
+                    p.fill(p.dev(ir), selected ? 102 : 20, selected ? 13 : 24, selected ? 19 : 32);
+                    p.frame(p.dev(ir), selected);
+                    int tx = ir.x + 16;
+                    if (combo_ == CB_COUNTRY && i < (int)list_.data.size()) {
+                        const int ci = list_.data[(size_t)i];
+                        const int fi = ci >= 0 && ci < 9 ? ci : 9;
+                        if (art_.flags[fi]) {
+                            const std::string key = "skp:flag" + std::to_string(fi);
+                            p.pcx(key.c_str(), art_.flags[fi], p.dev(ir.x + 10, ir.y + 18, 48, 34), true);
+                            tx += 54;
+                        }
+                    } else if (combo_ == CB_COLOR && i < (int)list_.swatch.size()) {
+                        const SDL_Color sw = list_.swatch[(size_t)i];
+                        if (sw.a) {
+                            p.fill(p.dev(ir.x + 14, ir.y + 19, 28, 32), sw.r, sw.g, sw.b);
+                            tx += 41;
+                        }
+                    }
+                    const int avail = std::max(10, ir.x + ir.w - tx - 10);
+                    std::string caption = list_.items[(size_t)i];
+                    while (!caption.empty() && p.text_w(caption, 28.0) > avail) caption.pop_back();
+                    p.text(caption, tx, ir.y, avail, ir.h, 0,
+                           art_.font_pal_text, "opy:", 28.0);
+                }
+                const auto nav = [&](const ra2engine::SbRect& rect, const char* caption, bool enabled) {
+                    p.fill(p.dev(rect), enabled ? 55 : 17, 7, 12);
+                    p.frame(p.dev(rect), enabled);
+                    p.text(caption, rect.x, rect.y, rect.w, rect.h, 1,
+                           enabled ? art_.font_pal_text : art_.font_pal_disabled,
+                           enabled ? "opy:" : "opd:", 21.0);
+                };
+                nav(picker_prev_rect(), "PREV", list_.top > 0);
+                nav(picker_next_rect(), "NEXT", list_.top + list_.rows() < (int)list_.items.size());
+                nav(picker_cancel_rect(), "CANCEL", true);
+            }
+        }
     } else {
         // --- dialog 0x6B: Select Engagement / Game Type / Game Map ---
         p.header(text_.sel_engagement, 34, 32, 385, 19);
@@ -911,6 +987,20 @@ void SkirmishSetupScene::handle(const ra2engine::InputEvent& ev) {
 
     // --- an open list owns the click ---
     if (combo_ != CB_NONE) {
+        if (mobile_picker()) {
+            if (picker_prev_rect().contains(lx, ly)) {
+                list_.scroll(-list_.visible);
+                return;
+            }
+            if (picker_next_rect().contains(lx, ly)) {
+                list_.scroll(list_.visible);
+                return;
+            }
+            if (picker_cancel_rect().contains(lx, ly)) {
+                close_combo(false);
+                return;
+            }
+        }
         if (list_.scrolls() && list_.strip_up().contains(lx, ly)) { list_.scroll(-1); return; }
         if (list_.scrolls() && list_.strip_down().contains(lx, ly)) { list_.scroll(+1); return; }
         const int i = list_.hit(lx, ly);
