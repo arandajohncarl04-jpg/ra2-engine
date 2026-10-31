@@ -140,6 +140,10 @@ static char* ra2_cli_pref_path() {
 
 using namespace ra2assets;
 
+// The font rasterizer and its standard-library dependencies must be included
+// at global scope, not inside the engine's anonymous namespace.
+#include "android_text.inc"
+
 namespace {
 // L2: the house this client plays (presentation-side reads: shroud, radar,
 // sidebar draw, EVA, cursor, power bar). GameScene sets it to its
@@ -5152,9 +5156,6 @@ void draw_fnt_text_f(SDL_Renderer* ren, ra2engine::TextureCache& tc, const ra2as
         cx += (w > 0 ? w : font.height() / 2) * scale;
     }
 }
-
-// Project Chrono: use the phone's antialiased system font on Android.
-#include "android_text.inc"
 
 void shade_rect(SDL_Renderer* ren, const ra2engine::SbRect& r, Uint8 alpha, Uint8 rr = 0,
                 Uint8 gg = 0, Uint8 bb = 0) {
