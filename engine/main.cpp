@@ -7364,10 +7364,10 @@ public:
         draw_timer_stack(ren, tc);   // W6-05-04/05 mission timer + SW countdowns
         draw_touch_bar(ren, tc);  // Project Chrono: crisp, bigger touch commands
         draw_touch_aim(ren);           // W6-01-02 / -07 (touch only)
-        draw_touch_mode_banner(ren);   // W4-AM-03 (touch only)
-        draw_touch_hint(ren);          // W4-AM-01 (touch only)
+        draw_touch_mode_banner(ren, tc);   // W4-AM-03 (touch only)
+        draw_touch_hint(ren, tc);          // W4-AM-01 (touch only)
         draw_touch_hold_ring(ren);     // W4-AM-07 (touch only)
-        draw_cameo_menu(ren);          // W6-01-03 (touch only)
+        draw_cameo_menu(ren, tc);          // W6-01-03 (touch only)
         if (campaign_) draw_campaign_overlay(ren, tc);   // P10 objectives / mission end (W2-UI-21)
         gf_render(ren, tc);   // gF: victory / defeat text during BorrowedTime (W2-UI-20 game font)
         // P7 overlays + the transient "game saved / load failed" banner.
