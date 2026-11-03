@@ -38,12 +38,17 @@ inline std::string asset_find_shp(const std::vector<std::string>& bases, const s
     return f;
 }
 
-// A building / NewTheater image: [themed, 'g'] (or literal) + ".shp".
-// `ra2_only` (the playable roster): RA2 archives only -- a YR-only roster
-// building (NABNKR, NAINDP) stays art-absent and therefore unbuildable, as
-// before; map objects and dressing take the YR tail too.
+// A building / NewTheater image: prefer theater-specific then generic SHP,
+// but also try the literal filename. Yuri's Revenge-only buildings such as
+// NABNKR / NAINDP can ship their base image under the un-munged art name.
+// The earlier renderer only searched NT*/NG* and discarded those types.
 inline bool asset_building_shp(const std::string& image, ra2assets::ShpFile& out, bool ra2_only = false) {
-    return !asset_find_shp(ra2assets::art_base_names(image, art_chain().letter), {".shp"}, out, ra2_only).empty();
+    std::vector<std::string> names = ra2assets::art_base_names(image, art_chain().letter);
+    std::string literal = image;
+    for (char& c : literal) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (!literal.empty() && std::find(names.begin(), names.end(), literal) == names.end())
+        names.push_back(literal);
+    return !asset_find_shp(names, {".shp"}, out, ra2_only).empty();
 }
 
 // Map-dressing / anim art: `Theater=yes` names take the theater extension
