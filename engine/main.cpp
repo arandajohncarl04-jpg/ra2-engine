@@ -4230,6 +4230,60 @@ void render_world(SDL_Renderer* ren, ra2engine::TextureCache& tc, Assets& a,
         const int bi = ra2engine::facing_to_index(u.body_facing, ra2engine::kVehicleFacings);
         return vxl_set(*va, 0, u.house).sprites[bi].w;
     };
+    // Project Chrono: an explicit Attack target is independent of the unit's
+    // A* movement path (commit_attack_target clears that path on attack).
+    // Render a separate red line to an actually visible target, never a
+    // green MOVE route or a line revealing an unseen enemy through fog.
+    auto draw_attack_target_line = [&](const ra2engine::Unit& u) {
+        double tx = 0.0, ty = 0.0;
+        int target_level = 0, cx = 0, cy = 0;
+        if (u.target_building >= 0 && u.target_building < static_cast<int>(world.buildings().size())) {
+            const ra2engine::Building& b = world.buildings()[static_cast<std::size_t>(u.target_building)];
+            if (!b.alive || b.state == ra2engine::Building::State::Dead) return;
+            cx = b.cx + b.fw / 2;
+            cy = b.cy + b.fh / 2;
+            tx = b.cx + (b.fw - 1) * 0.5;
+            ty = b.cy + (b.fh - 1) * 0.5;
+            target_level = b.level;
+        } else if (u.target >= 0 && u.target < static_cast<int>(us.size())) {
+            const ra2engine::Unit& t = us[static_cast<std::size_t>(u.target)];
+            if (!t.alive || t.die_time >= 0.0 || t.cargo_of >= 0 ||
+                !t.seen_by_house(g_local_house)) return;
+            cx = t.cell_x;
+            cy = t.cell_y;
+            tx = t.fx + t.sub_x / 256.0;
+            ty = t.fy + t.sub_y / 256.0;
+            target_level = t.level;
+        } else return;
+        if (!world.object_visible_at(g_local_house, cx, cy)) return;
+        auto screen = [&](double x, double y, int lv) {
+            return SDL_Point{static_cast<int>(std::lround((x - y) * 30.0 + cam.x + 30.0)),
+                             static_cast<int>(std::lround((x + y) * 15.0 - lv * 15.0 + cam.y + 15.0))};
+        };
+        const SDL_Point from = screen(u.fx + u.sub_x / 256.0, u.fy + u.sub_y / 256.0, u.level);
+        const SDL_Point to = screen(tx, ty, target_level);
+        const double length = std::hypot(static_cast<double>(to.x - from.x),
+                                         static_cast<double>(to.y - from.y));
+        if (length < 3.0) return;
+        SDL_BlendMode old = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(ren, &old);
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(ren, 255, 65, 65, 215);
+        // Dashed, two-pixel red target line: persists when the attacker holds
+        // position to fire and follows the target as it moves.
+        for (double d = 0.0; d < length; d += 12.0) {
+            const double e = std::min(length, d + 7.0);
+            const int x0 = static_cast<int>(std::lround(from.x + (to.x - from.x) * d / length));
+            const int y0 = static_cast<int>(std::lround(from.y + (to.y - from.y) * d / length));
+            const int x1 = static_cast<int>(std::lround(from.x + (to.x - from.x) * e / length));
+            const int y1 = static_cast<int>(std::lround(from.y + (to.y - from.y) * e / length));
+            SDL_RenderDrawLine(ren, x0, y0, x1, y1);
+            SDL_RenderDrawLine(ren, x0, y0 + 1, x1, y1 + 1);
+        }
+        SDL_Rect endpoint{to.x - 3, to.y - 3, 7, 7};
+        SDL_RenderDrawRect(ren, &endpoint);
+        SDL_SetRenderDrawBlendMode(ren, old);
+    };
     // Paths + selection markers first (under the sprites); skip dead/dying
     // units entirely (no path, no selection marker for a corpse-in-progress).
     for (const ra2engine::Unit& u : us) {
@@ -4237,8 +4291,14 @@ void render_world(SDL_Renderer* ren, ra2engine::TextureCache& tc, Assets& a,
         // G-88: in the real game only the player's SELECTED units show their
         // route, and only with RA2.INI "Target Lines" on (UnitActionLines);
         // the non-interactive render paths keep the old every-unit debug lines.
-        if (!input || (usel(u) && u.house == g_local_house && pres_target_lines()))
-            ra2engine::draw_path(ren, u, cam, W, H);   // carried units draw nothing
+        if (!input) {
+            ra2engine::draw_path(ren, u, cam, W, H);   // legacy demo overlay
+        } else if (usel(u) && u.house == g_local_house && pres_target_lines()) {
+            if (u.attack_order && (u.target >= 0 || u.target_building >= 0))
+                draw_attack_target_line(u);
+            else
+                ra2engine::draw_path(ren, u, cam, W, H);   // normal MOVE = green
+        }
         // W2-UI-11: in the real game the selection marker IS the pip board
         // (drawn with the bars below); other render paths keep the diamond.
         if (usel(u) && !(input && g_pips)) ra2engine::draw_selection(ren, u, cam, W, H, veh_width(u));
