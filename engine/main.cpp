@@ -7233,18 +7233,39 @@ public:
             map_pals_[2] = &ba_.unit_pal;
             for (int i = 0; i < 3; ++i) g_map_pals[i] = map_pals_[i];
             g_map_dressing = &map_dressing_;
-            g_smudge_hook = [this](bool crater, double fx, double fy) {
-                // W4: no crater / scorch smudge on a water cell (the shot-down
-                // ALL01 missiles left crater rings on the harbour). [RE-FALLBACK:
-                // the original's SmudgeType placement test was not traced; its
-                // smudges never appear on water.]
+            // Project Chrono: smudges are presentation-only. A Water cell may
+            // temporarily be blocked by a bridge, building or occupancy, so
+            // the NAVAL PASSABILITY grid cannot classify land vs water.
+            // Keep the original map's land types as an immutable reference.
+            std::vector<ra2assets::LandType> smudge_terrain =
+                resolve_land_types(a_.map, a_.theater, world_.grid_w(), world_.grid_h());
+            g_smudge_hook = [this, smudge_terrain = std::move(smudge_terrain)](
+                                bool crater, double fx, double fy) {
                 const int x = static_cast<int>(std::lround(fx)), y = static_cast<int>(std::lround(fy));
-                const std::vector<std::uint8_t>& wg = world_.grid_for(ra2engine::MovementDomain::Water);
-                if (x >= 0 && y >= 0 && x < world_.grid_w() && y < world_.grid_h() &&
-                    static_cast<std::size_t>(y) * world_.grid_w() + x < wg.size() &&
-                    wg[static_cast<std::size_t>(y) * world_.grid_w() + x])
+                if (x < 0 || y < 0 || x >= world_.grid_w() || y >= world_.grid_h()) return;
+                const ra2assets::MapCell* mc = a_.map.at(x, y);
+                if (!mc) return;
+                const std::size_t idx = static_cast<std::size_t>(y) * world_.grid_w() + x;
+                const auto& wg = world_.grid_for(ra2engine::MovementDomain::Water);
+                const bool water_surface =
+                    (idx < smudge_terrain.size() &&
+                     smudge_terrain[idx] == ra2assets::LandType::Water) ||
+                    a_.theater.land_type_of_cell(mc->tile) == ra2assets::LandType::Water;
+                if (water_surface || (idx < wg.size() && wg[idx])) {
+                    // The graphic must not be created on sea or river cells.
+                    // If an actual water tile's NAVAL grid is already zero,
+                    // record it: the smudge itself never mutates that grid.
+                    if (water_surface && idx < wg.size() && !wg[idx])
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                    "[chrono-water] water blast at (%d,%d) has blocked naval grid; "
+                                    "check bridge, structure, and occupancy state", x, y);
                     return;
+                }
+                const std::uint8_t naval_before = idx < wg.size() ? wg[idx] : 0;
                 map_dressing_.add_smudge(crater, fx, fy);
+                if (idx < wg.size() && wg[idx] != naval_before)
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                 "[chrono-water] smudge unexpectedly changed naval grid at (%d,%d)", x, y);
             };
         } catch (const std::exception& ex) {
             std::cerr << "[map-dressing] unavailable: " << ex.what() << "\n";
