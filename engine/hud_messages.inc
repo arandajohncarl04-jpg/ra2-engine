@@ -149,16 +149,44 @@
                 const long secs = sw->ready ? 0 : static_cast<long>(std::max(0.0, sw->recharge_secs - sw->timer));
                 SDL_Color col = house_text_color(h);
                 if (secs == 0 && blink_on) col = blink_color();   // ColorSchemes[0]
-                timer_lines_.push_back({timer_fmt(name, secs), col});
+                // Project Chrono touch layout: compact labels fit entirely
+                // inside the 168 px sidebar instead of spilling onto the map.
+                std::string shown = name;
+                if (sidebar_up_) {
+                    shown = ra2engine::superweapon_type_name(t);
+                    if (t == ra2engine::SuperweaponType::Nuke) shown = "NUKE";
+                    else if (t == ra2engine::SuperweaponType::IronCurtain) shown = "IRON";
+                    else if (t == ra2engine::SuperweaponType::LightningStorm) shown = "STORM";
+                    else if (t == ra2engine::SuperweaponType::ChronoSphere) shown = "CHRONO";
+                    else if (t == ra2engine::SuperweaponType::PsychicDominator) shown = "PSYCHIC";
+                    if (shown.size() > 9) shown.resize(9);
+                }
+                timer_lines_.push_back({timer_fmt(shown, secs), col});
             }
     }
     void draw_timer_stack(SDL_Renderer* ren, ra2engine::TextureCache& tc) {
         build_timer_stack();
         const double sc = hud_touch_scale();   // W6-01-12: 1.5x on a touch canvas
         const int fh = static_cast<int>((hud_line_h() + 2) * sc);
-        for (std::size_t i = 0; i < timer_lines_.size(); ++i)
-            hud_text(ren, tc, timer_lines_[i].text, playfield_w_ - 3, kWinH - fh * static_cast<int>(i + 1),
+        // Original RA2 draws countdowns at the tactical map's bottom-right.
+        // On Project Chrono's touch UI this covered the playfield. Anchor the
+        // compact timers to a dark strip INSIDE the sidebar's bottom edge.
+        const bool in_sidebar = sidebar_up_ && lay_.bar.w >= 120;
+        const int right_x = in_sidebar ? lay_.bar.x + lay_.bar.w - 6 : playfield_w_ - 3;
+        for (std::size_t i = 0; i < timer_lines_.size(); ++i) {
+            const int y = kWinH - fh * static_cast<int>(i + 1);
+            if (in_sidebar) {
+                SDL_BlendMode old_blend = SDL_BLENDMODE_NONE;
+                SDL_GetRenderDrawBlendMode(ren, &old_blend);
+                SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderDrawColor(ren, 8, 17, 27, 222);
+                const SDL_Rect bg{lay_.bar.x + 2, y - 1, lay_.bar.w - 4, fh + 1};
+                SDL_RenderFillRect(ren, &bg);
+                SDL_SetRenderDrawBlendMode(ren, old_blend);
+            }
+            hud_text(ren, tc, timer_lines_[i].text, right_x, y,
                      timer_lines_[i].col, kHudRight, false, true, sc);
+        }
     }
     void draw_end_banner(SDL_Renderer* ren, ra2engine::TextureCache& tc, const std::string& s) const {
         if (s.empty()) return;
