@@ -4244,7 +4244,8 @@ void render_world(SDL_Renderer* ren, ra2engine::TextureCache& tc, Assets& a,
             cy = b.cy + b.fh / 2;
             tx = b.cx + (b.fw - 1) * 0.5;
             ty = b.cy + (b.fh - 1) * 0.5;
-            target_level = b.level;
+            const ra2assets::MapCell* ground = a.map.at(b.cx, b.cy);
+            target_level = ground ? ground->level : 0;
         } else if (u.target >= 0 && u.target < static_cast<int>(us.size())) {
             const ra2engine::Unit& t = us[static_cast<std::size_t>(u.target)];
             if (!t.alive || t.die_time >= 0.0 || t.cargo_of >= 0 ||
