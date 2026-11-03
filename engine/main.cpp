@@ -2812,15 +2812,27 @@ BuildingAssets load_building_assets(const ra2assets::MixFile& ra2,
                 } catch (const std::exception&) { slot.has_buildup = false; }
             }
             if (!d.cameo.empty()) {
+                std::string cn = d.cameo;
+                for (char& ch : cn) ch = (char)std::tolower((unsigned char)ch);
+                // Preserve RA2 cameo.mix precedence, then search Yuri's
+                // Revenge's cameomd.mix via the merged asset archive list.
+                // BNKRICON / INDPICON are not in the RA2-only cameo archive.
                 try {
                     MixFile cameo_mix = language.open_nested("cameo.mix");
-                    std::string cn = d.cameo;
-                    for (char& ch : cn) ch = (char)std::tolower((unsigned char)ch);
                     if (const MixEntry* ce = cameo_mix.find(cn + ".shp")) {
                         slot.cameo = ShpFile::load(cameo_mix.read(*ce));
                         slot.has_cameo = true;
                     }
-                } catch (const std::exception&) { slot.has_cameo = false; }
+                } catch (const std::exception&) {}
+                if (!slot.has_cameo) {
+                    std::vector<uint8_t> raw;
+                    if (asset_read(cn + ".shp", raw)) {
+                        try {
+                            slot.cameo = ShpFile::load(raw);
+                            slot.has_cameo = true;
+                        } catch (const std::exception&) {}
+                    }
+                }
             }
         } catch (const std::exception& ex) {
             std::cerr << "[building] " << id << " main image missing (" << ex.what() << ")\n";
