@@ -140,6 +140,10 @@ static char* ra2_cli_pref_path() {
 
 using namespace ra2assets;
 
+// The font rasterizer and its standard-library dependencies must be included
+// at global scope, not inside the engine's anonymous namespace.
+#include "android_text.inc"
+
 namespace {
 // L2: the house this client plays (presentation-side reads: shroud, radar,
 // sidebar draw, EVA, cursor, power bar). GameScene sets it to its
@@ -2808,15 +2812,27 @@ BuildingAssets load_building_assets(const ra2assets::MixFile& ra2,
                 } catch (const std::exception&) { slot.has_buildup = false; }
             }
             if (!d.cameo.empty()) {
+                std::string cn = d.cameo;
+                for (char& ch : cn) ch = (char)std::tolower((unsigned char)ch);
+                // Preserve RA2 cameo.mix precedence, then search Yuri's
+                // Revenge's cameomd.mix via the merged asset archive list.
+                // BNKRICON / INDPICON are not in the RA2-only cameo archive.
                 try {
                     MixFile cameo_mix = language.open_nested("cameo.mix");
-                    std::string cn = d.cameo;
-                    for (char& ch : cn) ch = (char)std::tolower((unsigned char)ch);
                     if (const MixEntry* ce = cameo_mix.find(cn + ".shp")) {
                         slot.cameo = ShpFile::load(cameo_mix.read(*ce));
                         slot.has_cameo = true;
                     }
-                } catch (const std::exception&) { slot.has_cameo = false; }
+                } catch (const std::exception&) {}
+                if (!slot.has_cameo) {
+                    std::vector<uint8_t> raw;
+                    if (asset_read(cn + ".shp", raw)) {
+                        try {
+                            slot.cameo = ShpFile::load(raw);
+                            slot.has_cameo = true;
+                        } catch (const std::exception&) {}
+                    }
+                }
             }
         } catch (const std::exception& ex) {
             std::cerr << "[building] " << id << " main image missing (" << ex.what() << ")\n";
@@ -3487,9 +3503,17 @@ bool building_art_opaque(const ra2engine::Building& b, const BuildingAssets& ba,
     const bool buildup =
         selling || (b.state == ra2engine::Building::State::Buildup && art.has_buildup);
     const ra2assets::ShpFile& shp = buildup ? art.buildup : art.shp;
-    const int frame = selling ? ra2engine::mirrored_buildup_frame(b, art.buildup.count())
-                    : buildup ? ra2engine::buildup_frame(b, art.buildup.count())
-                              : ra2engine::building_frame(b, art.shp.count(), condition_yellow);
+    int frame = selling ? ra2engine::mirrored_buildup_frame(b, art.buildup.count())
+              : buildup ? ra2engine::buildup_frame(b, art.buildup.count())
+                        : ra2engine::building_frame(b, art.shp.count(), condition_yellow);
+    if (!buildup && g_fx && b.type < static_cast<int>(ba.roster.size())) {
+        // A touch must hit the ACTUAL visible garrison sprite, not the plain
+        // unoccupied image. Keep alpha picking in sync with draw_building.
+        const auto& def = ba.roster[static_cast<std::size_t>(b.type)];
+        frame = pres_building_main_frame(b, def.id,
+                                         def.image.empty() ? def.id : def.image,
+                                         frame, art.shp.count(), condition_yellow);
+    }
     const ra2engine::ScreenPt dp = ra2engine::building_draw_point(b.cx, b.cy, level);
     const int fcx = dp.x + cam.x, fcy = dp.y + cam.y;
     if (shp_frame_opaque(shp, frame, fcx, fcy, px, py, masks)) return true;
@@ -4218,6 +4242,61 @@ void render_world(SDL_Renderer* ren, ra2engine::TextureCache& tc, Assets& a,
         const int bi = ra2engine::facing_to_index(u.body_facing, ra2engine::kVehicleFacings);
         return vxl_set(*va, 0, u.house).sprites[bi].w;
     };
+    // Project Chrono: an explicit Attack target is independent of the unit's
+    // A* movement path (commit_attack_target clears that path on attack).
+    // Render a separate red line to an actually visible target, never a
+    // green MOVE route or a line revealing an unseen enemy through fog.
+    auto draw_attack_target_line = [&](const ra2engine::Unit& u) {
+        double tx = 0.0, ty = 0.0;
+        int target_level = 0, cx = 0, cy = 0;
+        if (u.target_building >= 0 && u.target_building < static_cast<int>(world.buildings().size())) {
+            const ra2engine::Building& b = world.buildings()[static_cast<std::size_t>(u.target_building)];
+            if (!b.alive || b.state == ra2engine::Building::State::Dead) return;
+            cx = b.cx + b.fw / 2;
+            cy = b.cy + b.fh / 2;
+            tx = b.cx + (b.fw - 1) * 0.5;
+            ty = b.cy + (b.fh - 1) * 0.5;
+            const ra2assets::MapCell* ground = a.map.at(b.cx, b.cy);
+            target_level = ground ? ground->level : 0;
+        } else if (u.target >= 0 && u.target < static_cast<int>(us.size())) {
+            const ra2engine::Unit& t = us[static_cast<std::size_t>(u.target)];
+            if (!t.alive || t.die_time >= 0.0 || t.cargo_of >= 0 ||
+                !t.seen_by_house(g_local_house)) return;
+            cx = t.cell_x;
+            cy = t.cell_y;
+            tx = t.fx + t.sub_x / 256.0;
+            ty = t.fy + t.sub_y / 256.0;
+            target_level = t.level;
+        } else return;
+        if (!world.object_visible_at(g_local_house, cx, cy)) return;
+        auto screen = [&](double x, double y, int lv) {
+            return SDL_Point{static_cast<int>(std::lround((x - y) * 30.0 + cam.x + 30.0)),
+                             static_cast<int>(std::lround((x + y) * 15.0 - lv * 15.0 + cam.y + 15.0))};
+        };
+        const SDL_Point from = screen(u.fx + u.sub_x / 256.0, u.fy + u.sub_y / 256.0, u.level);
+        const SDL_Point to = screen(tx, ty, target_level);
+        const double length = std::hypot(static_cast<double>(to.x - from.x),
+                                         static_cast<double>(to.y - from.y));
+        if (length < 3.0) return;
+        SDL_BlendMode old = SDL_BLENDMODE_NONE;
+        SDL_GetRenderDrawBlendMode(ren, &old);
+        SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(ren, 255, 65, 65, 215);
+        // Dashed, two-pixel red target line: persists when the attacker holds
+        // position to fire and follows the target as it moves.
+        for (double d = 0.0; d < length; d += 12.0) {
+            const double e = std::min(length, d + 7.0);
+            const int x0 = static_cast<int>(std::lround(from.x + (to.x - from.x) * d / length));
+            const int y0 = static_cast<int>(std::lround(from.y + (to.y - from.y) * d / length));
+            const int x1 = static_cast<int>(std::lround(from.x + (to.x - from.x) * e / length));
+            const int y1 = static_cast<int>(std::lround(from.y + (to.y - from.y) * e / length));
+            SDL_RenderDrawLine(ren, x0, y0, x1, y1);
+            SDL_RenderDrawLine(ren, x0, y0 + 1, x1, y1 + 1);
+        }
+        SDL_Rect endpoint{to.x - 3, to.y - 3, 7, 7};
+        SDL_RenderDrawRect(ren, &endpoint);
+        SDL_SetRenderDrawBlendMode(ren, old);
+    };
     // Paths + selection markers first (under the sprites); skip dead/dying
     // units entirely (no path, no selection marker for a corpse-in-progress).
     for (const ra2engine::Unit& u : us) {
@@ -4225,8 +4304,14 @@ void render_world(SDL_Renderer* ren, ra2engine::TextureCache& tc, Assets& a,
         // G-88: in the real game only the player's SELECTED units show their
         // route, and only with RA2.INI "Target Lines" on (UnitActionLines);
         // the non-interactive render paths keep the old every-unit debug lines.
-        if (!input || (usel(u) && u.house == g_local_house && pres_target_lines()))
-            ra2engine::draw_path(ren, u, cam, W, H);   // carried units draw nothing
+        if (!input) {
+            ra2engine::draw_path(ren, u, cam, W, H);   // legacy demo overlay
+        } else if (usel(u) && u.house == g_local_house && pres_target_lines()) {
+            if (u.attack_order && (u.target >= 0 || u.target_building >= 0))
+                draw_attack_target_line(u);
+            else
+                ra2engine::draw_path(ren, u, cam, W, H);   // normal MOVE = green
+        }
         // W2-UI-11: in the real game the selection marker IS the pip board
         // (drawn with the bars below); other render paths keep the diamond.
         if (usel(u) && !(input && g_pips)) ra2engine::draw_selection(ren, u, cam, W, H, veh_width(u));
@@ -6383,12 +6468,31 @@ void draw_shell(SDL_Renderer* ren, ra2engine::TextureCache& tc, const MenuArt& a
         auto centered = [&](const std::string& s, int lx, int ly, int lw, int lh,
                             int gscale, int ldx = 0, int ldy = 0) {
             SDL_Rect box = dev(lx, ly, lw, lh);
+#ifdef __ANDROID__
+            if (chrono_android_text(ren, tc, s, box, 1,
+                                    static_cast<int>(std::lround(canvas_scale * (lh <= 20 ? 16.0 : 23.0))),
+                                    SDL_Color{246, 206, 119, 255})) return;
+            // Fallback to original Westwood glyphs when system fonts are unavailable.
+            // Project Chrono: the stock 16px header glyphs are unreadable on
+            // a dense phone display. Use fractional text sizing in the shell
+            // chrome too, with width/height bounds to preserve hit geometry.
+            double sc = std::max(1.0, canvas_scale * (lh <= 20 ? 16.0 : 22.0) / 16.0);
+            const double glyph_w = fnt_text_width(f, s);
+            if (glyph_w > 0) sc = std::min(sc, std::max(0.75, (box.w - 6.0) / glyph_w));
+            if (f.height() > 0) sc = std::min(sc, std::max(0.75, box.h * 0.96 / f.height()));
+            const double tw = glyph_w * sc;
+            const double th = f.height() * sc;
+            const double tx = box.x + (box.w - tw) / 2.0 + ldx * canvas_scale;
+            const double ty = box.y + (box.h - th) / 2.0 + ldy * canvas_scale;
+            draw_fnt_text_f(ren, tc, f, *art.font_pal, s, tx, ty, "shf:", sc);
+#else
             int tw = fnt_text_width(f, s) * gscale;
             while (gscale > 1 && tw > box.w) { --gscale; tw = fnt_text_width(f, s) * gscale; }
             const int th = f.height() * gscale;
             const int tx = box.x + (box.w - tw) / 2 + static_cast<int>(std::lround(ldx * canvas_scale));
             const int ty = box.y + (box.h - th) / 2 + static_cast<int>(std::lround(ldy * canvas_scale));
             draw_fnt_text(ren, tc, f, *art.font_pal, s, tx, ty, "shf:", gscale);
+#endif
         };
         for (int i = 0; i < static_cast<int>(buttons.size()); ++i) {
             const ShellButton& b = buttons[i];
@@ -7202,18 +7306,39 @@ public:
             map_pals_[2] = &ba_.unit_pal;
             for (int i = 0; i < 3; ++i) g_map_pals[i] = map_pals_[i];
             g_map_dressing = &map_dressing_;
-            g_smudge_hook = [this](bool crater, double fx, double fy) {
-                // W4: no crater / scorch smudge on a water cell (the shot-down
-                // ALL01 missiles left crater rings on the harbour). [RE-FALLBACK:
-                // the original's SmudgeType placement test was not traced; its
-                // smudges never appear on water.]
+            // Project Chrono: smudges are presentation-only. A Water cell may
+            // temporarily be blocked by a bridge, building or occupancy, so
+            // the NAVAL PASSABILITY grid cannot classify land vs water.
+            // Keep the original map's land types as an immutable reference.
+            std::vector<ra2assets::LandType> smudge_terrain =
+                resolve_land_types(a_.map, a_.theater, world_.grid_w(), world_.grid_h());
+            g_smudge_hook = [this, smudge_terrain = std::move(smudge_terrain)](
+                                bool crater, double fx, double fy) {
                 const int x = static_cast<int>(std::lround(fx)), y = static_cast<int>(std::lround(fy));
-                const std::vector<std::uint8_t>& wg = world_.grid_for(ra2engine::MovementDomain::Water);
-                if (x >= 0 && y >= 0 && x < world_.grid_w() && y < world_.grid_h() &&
-                    static_cast<std::size_t>(y) * world_.grid_w() + x < wg.size() &&
-                    wg[static_cast<std::size_t>(y) * world_.grid_w() + x])
+                if (x < 0 || y < 0 || x >= world_.grid_w() || y >= world_.grid_h()) return;
+                const ra2assets::MapCell* mc = a_.map.at(x, y);
+                if (!mc) return;
+                const std::size_t idx = static_cast<std::size_t>(y) * world_.grid_w() + x;
+                const auto& wg = world_.grid_for(ra2engine::MovementDomain::Water);
+                const bool water_surface =
+                    (idx < smudge_terrain.size() &&
+                     smudge_terrain[idx] == ra2assets::LandType::Water) ||
+                    a_.theater.land_type_of_cell(mc->tile) == ra2assets::LandType::Water;
+                if (water_surface || (idx < wg.size() && wg[idx])) {
+                    // The graphic must not be created on sea or river cells.
+                    // If an actual water tile's NAVAL grid is already zero,
+                    // record it: the smudge itself never mutates that grid.
+                    if (water_surface && idx < wg.size() && !wg[idx])
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                                    "[chrono-water] water blast at (%d,%d) has blocked naval grid; "
+                                    "check bridge, structure, and occupancy state", x, y);
                     return;
+                }
+                const std::uint8_t naval_before = idx < wg.size() ? wg[idx] : 0;
                 map_dressing_.add_smudge(crater, fx, fy);
+                if (idx < wg.size() && wg[idx] != naval_before)
+                    SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
+                                 "[chrono-water] smudge unexpectedly changed naval grid at (%d,%d)", x, y);
             };
         } catch (const std::exception& ex) {
             std::cerr << "[map-dressing] unavailable: " << ex.what() << "\n";
@@ -7339,12 +7464,12 @@ public:
         draw_beacons(ren, tc);    // W9-05-08: own + mutual allies' beacons
         draw_messages(ren, tc);   // W2-UI-21 (game saved, defeated, low power)
         draw_timer_stack(ren, tc);   // W6-05-04/05 mission timer + SW countdowns
-        draw_touch_bar(ren);      // W2-AR-08 (touch only)
+        draw_touch_bar(ren, tc);  // Project Chrono: crisp, bigger touch commands
         draw_touch_aim(ren);           // W6-01-02 / -07 (touch only)
-        draw_touch_mode_banner(ren);   // W4-AM-03 (touch only)
-        draw_touch_hint(ren);          // W4-AM-01 (touch only)
+        draw_touch_mode_banner(ren, tc);   // W4-AM-03 (touch only)
+        draw_touch_hint(ren, tc);          // W4-AM-01 (touch only)
         draw_touch_hold_ring(ren);     // W4-AM-07 (touch only)
-        draw_cameo_menu(ren);          // W6-01-03 (touch only)
+        draw_cameo_menu(ren, tc);          // W6-01-03 (touch only)
         if (campaign_) draw_campaign_overlay(ren, tc);   // P10 objectives / mission end (W2-UI-21)
         gf_render(ren, tc);   // gF: victory / defeat text during BorrowedTime (W2-UI-20 game font)
         // P7 overlays + the transient "game saved / load failed" banner.

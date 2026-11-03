@@ -52,20 +52,59 @@ struct ShellPainter {
         return true;
     }
     bool fnt() const { return art.font && art.fnt_ok; }
+    // Project Chrono mobile readability pass:
+    // The old round(xf.s * 12/16) is 1.0 at the Android logical 1280x720
+    // resolution (xf.s=1.5): a 16px physical-font glyph on a phone.
+    // Fractional scaling gives controls ~24px-high glyphs at the same canvas,
+    // while fitting both the bounding box and the available text width.
+    double glyph_scale(double logical_px) const {
+#ifdef __ANDROID__
+        // At 720p, standard 12px UI text becomes 16 logical px / 24 canvas px.
+        // Explicit larger text (e.g. the 28px touch picker) is respected.
+        const double effective_px = std::max(16.0, logical_px);
+        return std::max(1.0, xf.s * effective_px / 16.0);
+#else
+        // Preserve calibrated desktop menu layout and screenshot gates.
+        return std::max(1.0, std::round(xf.s * logical_px / 16.0));
+#endif
+    }
     double text_w(const std::string& s, double logical_px) const {
+#ifdef __ANDROID__
+        if (chrono_android_font().valid) {
+            const int px = std::max(12, static_cast<int>(
+                std::lround(xf.s * std::max(16.0, logical_px))));
+            return chrono_android_text_width(s, px) / xf.s;
+        }
+#endif
         if (!fnt()) return 0.0;
-        const double sc = std::max(1.0, std::round(xf.s * logical_px / 16.0));
-        return fnt_text_width(*art.font, s) * sc / xf.s;   // in LOGICAL px
+        return fnt_text_width(*art.font, s) * glyph_scale(logical_px) / xf.s;
     }
     // align: 0 = left, 1 = centre, 2 = right; vertically centred in the rect.
     void text(const std::string& s, int lx, int ly, int lw, int lh, int align,
               const ra2assets::Palette* pal, const char* keypfx, double logical_px) const {
-        if (!fnt() || !pal || s.empty()) return;
-        const ra2assets::Font& f = *art.font;
-        // 12metfnt cell = 16 px; snap to an integer glyph scale (fractional
-        // nearest-neighbour scaling visibly mangles the 1-px bevel strokes).
-        const double sc = std::max(1.0, std::round(xf.s * logical_px / 16.0));
+        if (s.empty()) return;
         const SDL_Rect box = dev(lx, ly, lw, lh);
+#ifdef __ANDROID__
+        // Antialiased Android font, not the small 12metfnt pixel glyphs.
+        // Every call uses the actual fitted control rectangle.
+        const bool disabled = pal && pal == art.font_pal_disabled;
+        const bool heading = keypfx && std::string(keypfx) == "oph:";
+        const SDL_Color ink = disabled ? SDL_Color{174, 98, 98, 255} :
+                              heading ? SDL_Color{249, 206, 109, 255} :
+                                        SDL_Color{252, 232, 158, 255};
+        const int px = static_cast<int>(std::lround(xf.s * std::max(16.0, logical_px)));
+        if (chrono_android_text(ren, tc, s, box, align, px, ink)) return;
+#endif
+        if (!fnt() || !pal) return;
+        const ra2assets::Font& f = *art.font;
+        double sc = glyph_scale(logical_px);
+#ifdef __ANDROID__
+        // No overflow into adjacent buttons/checkboxes. Allow slightly
+        // smaller text for an unusually long translated country name.
+        const double tw0 = fnt_text_width(f, s);
+        if (tw0 > 0.0) sc = std::min(sc, std::max(0.75, (box.w - 4.0) / tw0));
+        if (f.height() > 0) sc = std::min(sc, std::max(0.75, box.h * 0.97 / f.height()));
+#endif
         const double tw = fnt_text_width(f, s) * sc;
         const double th = f.height() * sc;
         double tx = box.x;

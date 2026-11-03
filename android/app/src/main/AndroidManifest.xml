@@ -42,7 +42,7 @@
     <!-- W2-AR-12: backups keep RA2.INI + saves only (never the user's ~750 MB
          of game files). -->
     <application android:label="@string/app_name"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_chrono"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"

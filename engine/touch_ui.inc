@@ -49,7 +49,7 @@ void touch_cancel_mode() {
     e.kind = ra2engine::InputEvent::PointerUp;
     input_.handle(e);
 }
-void draw_touch_mode_banner(SDL_Renderer* ren) {
+void draw_touch_mode_banner(SDL_Renderer* ren, ra2engine::TextureCache& tc) {
     if (!touch_banner_visible()) return;
     static const char* kText[5] = {"", "SELL - TAP A BUILDING, TAP AGAIN TO SELL",
                                    "REPAIR - TAP A BUILDING, TAP AGAIN TO REPAIR",
@@ -63,8 +63,16 @@ void draw_touch_mode_banner(SDL_Renderer* ren) {
     SDL_RenderDrawRect(ren, &b);
     const std::string aim = touch_aim_text();   // W6-01-02 / -07
     const std::string line = aim.empty() ? std::string(kText[touch_mode()]) : aim;
-    const int scale = static_cast<int>(line.size()) * 12 <= b.w - 76 ? 2 : 1;
-    draw_text(ren, line, b.x + 10, b.y + (b.h - 7 * scale) / 2, scale, 240, 220, 120);
+    const SDL_Rect caption{b.x + 8, b.y + 2, std::max(20, b.w - 72), b.h - 4};
+#ifdef __ANDROID__
+    // Show selected action / two-tap confirmation in the same clean UI4 font.
+    if (!chrono_android_text(ren, tc, line, caption, 0, 24, SDL_Color{248, 224, 154, 255})) {
+#endif
+        const int scale = static_cast<int>(line.size()) * 12 <= b.w - 76 ? 2 : 1;
+        draw_text(ren, line, b.x + 10, b.y + (b.h - 7 * scale) / 2, scale, 240, 220, 120);
+#ifdef __ANDROID__
+    }
+#endif
     const SDL_Rect c = touch_cancel_rect();
     SDL_SetRenderDrawColor(ren, 150, 40, 30, 0xE0);
     SDL_RenderFillRect(ren, &c);
@@ -231,7 +239,7 @@ void touch_hint_tick(double dt) {
     if (!touch_ui_ || input_locked_ || touch_hint_left_ <= 0.0) return;
     touch_hint_left_ -= dt;
 }
-void draw_touch_hint(SDL_Renderer* ren) {
+void draw_touch_hint(SDL_Renderer* ren, ra2engine::TextureCache& tc) {
     if (!touch_ui_ || input_locked_ || touch_hint_left_ <= 0.0 || menu_.open_ || sld_.is_open()) return;
     static const char* kLines[3] = {"DRAG: SCROLL    TAP: SELECT / ORDER",
                                     "DOUBLE TAP: ALL OF TYPE    HOLD + DRAG: BOX",
@@ -243,10 +251,19 @@ void draw_touch_hint(SDL_Renderer* ren) {
     SDL_SetRenderDrawColor(ren, 10, 12, 16, 0xB0);
     SDL_RenderFillRect(ren, &r);
     for (int i = 0; i < 3; ++i) {
-        const int lw = static_cast<int>(std::string(kLines[i]).size()) * 12 - 2;
-        const int scale = lw <= r.w - 8 ? 2 : 1;
-        const int tw = static_cast<int>(std::string(kLines[i]).size()) * 6 * scale - scale;
-        draw_text(ren, kLines[i], r.x + (r.w - tw) / 2, r.y + 5 + i * 20, scale, 235, 225, 200);
+        const SDL_Rect line{r.x + 4, r.y + 2 + i * 20, r.w - 8, 20};
+#ifdef __ANDROID__
+        if (!chrono_android_text(ren, tc, kLines[i], line, 1, 17,
+                                 SDL_Color{247, 230, 198, 255})) {
+#endif
+            const int lw = static_cast<int>(std::string(kLines[i]).size()) * 12 - 2;
+            const int scale = lw <= r.w - 8 ? 2 : 1;
+            const int tw = static_cast<int>(std::string(kLines[i]).size()) * 6 * scale - scale;
+            draw_text(ren, kLines[i], r.x + (r.w - tw) / 2, r.y + 5 + i * 20,
+                      scale, 235, 225, 200);
+#ifdef __ANDROID__
+        }
+#endif
     }
 }
 double touch_hint_left_ = 12.0;
@@ -427,7 +444,7 @@ bool cameo_menu_handle(const ra2engine::InputEvent& ev) {
     if (ev.kind == ra2engine::InputEvent::PointerDown) cm_type_ = -1;   // a tap elsewhere closes it
     return false;
 }
-void draw_cameo_menu(SDL_Renderer* ren) {
+void draw_cameo_menu(SDL_Renderer* ren, ra2engine::TextureCache& tc) {
     const std::vector<CameoMenuBtn> bs = cameo_menu_buttons();
     if (bs.empty()) return;
     SDL_SetRenderDrawBlendMode(ren, SDL_BLENDMODE_BLEND);
@@ -437,8 +454,16 @@ void draw_cameo_menu(SDL_Renderer* ren) {
         SDL_SetRenderDrawColor(ren, 230, 190, 60, 0xF0);
         SDL_RenderDrawRect(ren, &b.r);
         const std::string l = b.label;
-        const int lw = static_cast<int>(l.size()) * 12 - 2;
-        draw_text(ren, l, b.r.x + (b.r.w - lw) / 2, b.r.y + (b.r.h - 14) / 2, 2, 240, 230, 210);
+#ifdef __ANDROID__
+        if (!chrono_android_text(ren, tc, l, b.r, 1, 20,
+                                 SDL_Color{248, 232, 195, 255})) {
+#endif
+            const int lw = static_cast<int>(l.size()) * 12 - 2;
+            draw_text(ren, l, b.r.x + (b.r.w - lw) / 2, b.r.y + (b.r.h - 14) / 2,
+                      2, 240, 230, 210);
+#ifdef __ANDROID__
+        }
+#endif
     }
 }
 int cm_type_ = -1, cm_tab_ = -1, cm_x_ = 0, cm_y_ = 0, cm_h_ = 0;

@@ -1,0 +1,53 @@
+name: Project Chrono Android test APK
+
+on:
+  push:
+    branches: [project-chrono-mobile-ui]
+  workflow_dispatch:
+
+concurrency:
+  group: chrono-mobile-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      # Retain the SAME debug signing identity on future CI runs. This is an
+      # ephemeral TEST certificate, never suitable for a production release.
+      - name: Restore persistent debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: chrono-android-test-debug-keystore-v1
+      - name: Android SDK and NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "platforms;android-35" "build-tools;35.0.0" \
+            "cmake;3.22.1" "ndk;27.2.12479018"
+      - name: Build Project Chrono UI4 (ARM64 + emulator)
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug -Pra2.jobs=2 -Pra2.buildNumber=${{ github.run_number }}
+      - name: Inspect Android package ID, version and signature
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -6
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          sha256sum "$APK"
+      - name: Upload uniquely named Project Chrono UI4 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Project-Chrono-UI4-b${{ github.run_number }}-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

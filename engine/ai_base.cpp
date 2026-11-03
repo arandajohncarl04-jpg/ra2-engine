@@ -172,6 +172,11 @@ void spread_plan_tail(std::vector<PlannedNode>& plan, int& next_id, const AiCata
     }
     // Resolve each placeholder against the plan before it.
     std::vector<PlannedNode> out;
+    // The original defense-count target can be 22-25 on harder AI levels.
+    // This engine's deterministic fallback previously reused the same early
+    // available type for most placeholders, overwhelming bases with bunkers.
+    // Keep the target for towers/flak while limiting passive Battle Bunkers.
+    std::vector<int> selected_defenses(roster.size(), 0);
     int walls_owed = 0, cycle = 0;
     for (const PlannedNode& n : plan) {
         if (n.type != -1) { out.push_back(n); continue; }
@@ -184,10 +189,16 @@ void spread_plan_tail(std::vector<PlannedNode>& plan, int& next_id, const AiCata
             continue;
         }
         std::vector<int> ok;   // FUN_00506d10: a defence this house can build here
-        for (int t : cat.defenses)
-            if (t >= 0 && t < (int)roster.size() && prereqs_in_plan(t, out, roster, cat)) ok.push_back(t);
-        if (ok.empty()) continue;   // nothing buildable: the node is removed
+        for (int t : cat.defenses) {
+            if (t < 0 || t >= (int)roster.size() || !prereqs_in_plan(t, out, roster, cat))
+                continue;
+            if (roster[t].id == "NABNKR" && selected_defenses[(std::size_t)t] >= 3)
+                continue;  // Project Chrono: no Battle Bunker spam
+            ok.push_back(t);
+        }
+        if (ok.empty()) continue;   // no other eligible defense; do not substitute bunkers
         r.type = ok[(std::size_t)(cycle++ % (int)ok.size())];   // [RE-FALLBACK: AIForcePrediction pick]
+        ++selected_defenses[(std::size_t)r.type];
         ++walls_owed;
         out.push_back(r);
     }

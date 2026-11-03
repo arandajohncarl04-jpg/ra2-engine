@@ -262,8 +262,9 @@ int pres_building_main_frame(const ra2engine::Building& b, const std::string& id
     const int images = std::max(1, count / 2);
     const bool damaged = b.max_hp > 0 && b.hp <= yellow * b.max_hp;
     if (r.occupiable && images >= 4) {
-        const int f = (b.occupants.empty() ? 0 : 2) + (damaged ? 1 : 0);
-        return std::min(f, images - 1);
+        // Project Chrono: image 3 is also the LeaveRubble sprite on many
+        // civilian buildings. Never render it for a living garrison.
+        return ra2engine::garrison_building_frame(b, count, yellow, r.leave_rubble);
     }
     if (r.gate) {
         const PresFx::BldAnims& a = g_fx->building(pres_upper(image));
@@ -331,14 +332,42 @@ void pres_building_overlay(SDL_Renderer* ren, ra2engine::TextureCache& tc, const
     // W2-GA-14: factory door (one shot per exiting unit) and SW charge states.
     if (ev && ev->door_start >= 0)
         if (const FxAnimType* d = slot_t(door)) draw_t(d, oneshot_frame(*d, ev->door_start, now), door.x, door.y);
-    if (ev && ev->super_phase >= 0) {
+    // NAMISL's SHP is primarily animated via SuperAnim slots; its idle
+    // NAMISL_E must remain visible EVEN BEFORE the first READY transition.
+    // artmd.ini: E=idle loop, F=open once, G=charged loop, H=close once.
+    // The generic two-pair handler below is intentionally left for other SWs.
+    const bool silo = g_overlay_id == "NAMISL" || pres_upper(image) == "NAMISL";
+    if (silo) {
+        const int phase = ev ? ev->super_phase : -1;
+        const long started = ev ? ev->super_start : -1;
+        const int transition_slot = phase == 0 ? kBsSuper + 1
+                                  : phase == 2 ? kBsSuper + 3 : -1;
+        bool in_transition = false;
+        if (transition_slot >= 0) {
+            const PresFx::BldAnims::Slot& s = a.slot[transition_slot];
+            if (const FxAnimType* t = slot_t(s)) {
+                const int f = oneshot_frame(*t, started, now);
+                if (f >= 0) {
+                    draw_t(t, f, s.x, s.y);
+                    in_transition = true;
+                }
+            }
+        }
+        if (!in_transition) {
+            const int steady_slot = phase == 0 ? kBsSuper + 2 : kBsSuper;
+            const PresFx::BldAnims::Slot& s = a.slot[steady_slot];
+            if (const FxAnimType* t = slot_t(s))
+                draw_t(t, PresFx::loop_frame(*t, now), s.x, s.y);
+        }
+    } else if (ev && ev->super_phase >= 0) {
         const int open = ev->super_phase;          // 0 (ready) or 2 (fired)
         const PresFx::BldAnims::Slot& s1 = a.slot[kBsSuper + open];
         const PresFx::BldAnims::Slot& s2 = a.slot[kBsSuper + open + 1];
         const FxAnimType* t1 = slot_t(s1);
         const int fr = t1 ? oneshot_frame(*t1, ev->super_start, now) : -1;
         if (t1 && fr >= 0) draw_t(t1, fr, s1.x, s1.y);
-        else if (const FxAnimType* t2 = slot_t(s2)) draw_t(t2, PresFx::loop_frame(*t2, now), s2.x, s2.y);
+        else if (const FxAnimType* t2 = slot_t(s2))
+            draw_t(t2, PresFx::loop_frame(*t2, now), s2.x, s2.y);
     }
     if (ev) {
         for (int s = 0; s < PresFx::kBldSlots; ++s) {

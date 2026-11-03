@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Project Chrono launcher emblem: vector artwork; no copyrighted game assets. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- armoured midnight background -->
+    <path android:fillColor="#080D18"
+          android:pathData="M0,0 L108,0 L108,108 L0,108 Z"/>
+    <path android:fillColor="#17253A"
+          android:pathData="M5,10 L15,2 L93,2 L103,10 L103,98 L93,106 L15,106 L5,98 Z"/>
+    <path android:fillColor="#080D18"
+          android:pathData="M9,14 L19,7 L89,7 L99,14 L99,94 L89,101 L19,101 L9,94 Z"/>
+    <!-- crimson clock / radar ring -->
+    <path android:fillColor="#D82B37"
+          android:pathData="M54,17 A37,37 0,1 1,53.99 17 Z"/>
+    <path android:fillColor="#081122"
+          android:pathData="M54,21 A33,33 0,1 1,53.99 21 Z"/>
+    <path android:fillColor="#48627A"
+          android:pathData="M54,26 A28,28 0,1 1,53.99 26 Z"/>
+    <path android:fillColor="#1158A3"
+          android:pathData="M54,29 A25,25 0,1 1,53.99 29 Z"/>
+    <path android:fillColor="#258DD1"
+          android:pathData="M54,32 A22,22 0,1 1,53.99 32 Z"/>
+    <!-- meridians and latitude lines -->
+    <path android:fillColor="@android:color/transparent"
+          android:strokeColor="#A9E8FF" android:strokeWidth="1.7"
+          android:pathData="M54,32 C41,44 41,64 54,76 C67,64 67,44 54,32 M33,54 L75,54 M38,41 Q54,48 70,41 M38,67 Q54,60 70,67"/>
+    <!-- bevelled independent wings -->
+    <path android:fillColor="#DCE4EF"
+          android:pathData="M42,45 L30,37 L5,38 L13,47 L27,51 L39,56 Z
+                            M66,45 L78,37 L103,38 L95,47 L81,51 L69,56 Z"/>
+    <path android:fillColor="#6685B0"
+          android:pathData="M39,51 L25,48 L11,43 L17,51 L31,59 L42,57 Z
+                            M69,51 L83,48 L97,43 L91,51 L77,59 L66,57 Z"/>
+    <path android:fillColor="#0F287A"
+          android:pathData="M39,56 L25,57 L32,64 L47,64 Z
+                            M69,56 L83,57 L76,64 L61,64 Z"/>
+    <!-- centre clock hand with chrono split -->
+    <path android:fillColor="#FFFFFF"
+          android:pathData="M52,37 L56,37 L57,55 L67,62 L64,66 L51,58 Z"/>
+    <path android:fillColor="#FF3B48"
+          android:pathData="M54,12 L57,22 L51,22 Z M54,96 L58,86 L50,86 Z"/>
+    <path android:fillColor="#E6F7FF"
+          android:pathData="M54,49 A5,5 0,1 1,53.99 49 Z"/>
+    <path android:fillColor="#0C1F47"
+          android:pathData="M54,52 A2,2 0,1 1,53.99 52 Z"/>
+    <!-- silver framing ribs -->
+    <path android:fillColor="@android:color/transparent"
+          android:strokeColor="#CED8E6" android:strokeWidth="1.6"
+          android:pathData="M15,8 L6,16 L6,92 L15,100 M93,8 L102,16 L102,92 L93,100"/>
+</vector>

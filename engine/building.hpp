@@ -292,6 +292,12 @@ std::vector<std::uint8_t> buildable_static(const std::vector<std::uint8_t>& land
 // fewer than 2 image frames. Only meaningful in State::Idle.
 int building_frame(const Building& b, int shp_frame_count, double condition_yellow);
 
+// Presentation-only rule for CanBeOccupied buildings. Some civilian SHPs use
+// image frame 3 as LeaveRubble, NOT as an occupied+damaged frame. Do not draw
+// the death/rubble sprite while the building is alive. No world/sim mutation.
+int garrison_building_frame(const Building& b, int shp_frame_count,
+                            double condition_yellow, bool leave_rubble);
+
 // Frame selection for the BUILDUP SHP during State::Buildup
 // [RE-GATE APPLIED: building-render.md §5]: image frames = first half; the
 // anim plays ONCE, one frame per fixed PERIOD, period = buildup_total /
