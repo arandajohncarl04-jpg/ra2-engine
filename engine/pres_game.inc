@@ -1700,22 +1700,42 @@ private:
         };
         const int n = w.house_count();
         if (static_cast<int>(sw_anim_prev_.size()) < n) sw_anim_prev_.resize(static_cast<std::size_t>(n), 0);
+        if (static_cast<int>(nuke_anim_prev_.size()) < n) nuke_anim_prev_.resize(static_cast<std::size_t>(n), 0);
         for (int h = 0; h < n; ++h) {
             const ra2engine::Superweapon* sw = w.sw_state(h);
             const int st = !sw || sw->type == ra2engine::SuperweaponType::None ? 0 : (sw->ready ? 2 : 1);
+            const ra2engine::Superweapon* nuke = w.sw_state(h, ra2engine::SuperweaponType::Nuke);
+            const int nuke_st = !nuke ? 0 : (nuke->ready ? 2 : 1);
             int& prev = sw_anim_prev_[static_cast<std::size_t>(h)];
-            if (st != prev && st != 0) {
+            int& nuke_prev = nuke_anim_prev_[static_cast<std::size_t>(h)];
+            // A house can own more than one superweapon. A Soviet silo must
+            // follow the NUKE's own charge, not the first SW in house order.
+            if (st != prev || nuke_st != nuke_prev) {
                 for (const ra2engine::Building& b : bs) {
-                    if (!b.alive || b.house != h) continue;
+                    if (!b.alive || b.house != h || b.type < 0 ||
+                        b.type >= static_cast<int>(ba.roster.size())) continue;
                     const std::string img = image_of(b);
                     if (img.empty() || !fx_.building(img).slot[kBsSuper].t) continue;
+                    const bool silo = pres_upper(ba.roster[static_cast<std::size_t>(b.type)].id) == "NAMISL";
+                    const int state = silo ? nuke_st : st;
+                    const int old = silo ? nuke_prev : prev;
+                    if (state == old) continue;
                     BldEventState& e = g_bld_events[bld_event_key(b)];
-                    if (st == 2) { e.super_phase = 0; e.super_start = g_pres_tick; }                    // ready: open
-                    else if (prev == 2) { e.super_phase = 2; e.super_start = g_pres_tick; }             // fired: close
-                    else if (e.super_phase < 0) { e.super_phase = 2; e.super_start = -1; }          // charging
+                    if (state == 2) { e.super_phase = 0; e.super_start = g_pres_tick; }       // READY -> open
+                    else if (old == 2 && state == 1) { e.super_phase = 2; e.super_start = g_pres_tick; } // FIRE -> close
+                    else if (silo || state == 0) {
+                        // The silo stays closed while charging; a closing
+                        // SuperAnimFour must never loop during charging.
+                        e.super_phase = -1;
+                        e.super_start = -1;
+                    } else if (e.super_phase < 0) {
+                        e.super_phase = 2;
+                        e.super_start = -1;
+                    }
                 }
             }
             prev = st;
+            nuke_prev = nuke_st;
         }
     }
     // W3-FX AmbientSound: one looping positional voice per live object whose
@@ -1784,6 +1804,7 @@ public:
 private:
     std::size_t units_seen_ = 0;
     std::vector<int> sw_anim_prev_;
+    std::vector<int> nuke_anim_prev_;   // Project Chrono: silo charge edges separate from other SWs
     struct SwSeen { ra2engine::SuperweaponType type = ra2engine::SuperweaponType::None; bool ready = false; };
     std::vector<SwSeen> sw_prev_;
 
