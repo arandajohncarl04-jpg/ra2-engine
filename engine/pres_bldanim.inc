@@ -339,7 +339,15 @@ void pres_building_overlay(SDL_Renderer* ren, ra2engine::TextureCache& tc, const
         const FxAnimType* t1 = slot_t(s1);
         const int fr = t1 ? oneshot_frame(*t1, ev->super_start, now) : -1;
         if (t1 && fr >= 0) draw_t(t1, fr, s1.x, s1.y);
-        else if (const FxAnimType* t2 = slot_t(s2)) draw_t(t2, PresFx::loop_frame(*t2, now), s2.x, s2.y);
+        else if (const FxAnimType* t2 = slot_t(s2)) {
+            // Project Chrono: NAMISL's closing SuperAnimThree is one-shot.
+            // Its SuperAnimFour cannot loop forever while the nuke charges,
+            // otherwise the hatch visibly opens and closes like a light show.
+            // The base SHP is the closed/charging appearance after FIRE.
+            const bool silo = g_overlay_id == "NAMISL" || pres_upper(image) == "NAMISL";
+            if (!(silo && ev->super_phase == 2))
+                draw_t(t2, PresFx::loop_frame(*t2, now), s2.x, s2.y);
+        }
     }
     if (ev) {
         for (int s = 0; s < PresFx::kBldSlots; ++s) {
